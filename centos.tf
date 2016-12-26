@@ -29,8 +29,3 @@ resource "aws_instance" "centos7" {
     sshUser = "centos"
   }
 }
-
-resource "aws_eip" "centos7" {
-  instance = "${aws_instance.centos7.id}"
-  vpc      = true
-}

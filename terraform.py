@@ -24,13 +24,38 @@ from functools import wraps
 import json
 import os
 import re
+import logging
+import sys
 
 VERSION = '0.3.0pre'
+
+log = logging.getLogger(__name__)
+
+
+def trace_calls(frame, event, arg):
+    if event != 'call':
+        return
+    co = frame.f_code
+    func_name = co.co_name
+    if func_name == 'write':
+        # Ignore write() calls from print statements
+        return
+    func_line_no = frame.f_lineno
+    func_filename = co.co_filename
+    if func_filename != __file__:
+        return
+    caller = frame.f_back
+    caller_line_no = caller.f_lineno
+    caller_filename = caller.f_code.co_filename
+    print("Call to %s on line %s of %s from line %s of %s" % (func_name, func_line_no, func_filename, caller_line_no, caller_filename))
+    return
 
 
 def tfstates(root=None):
     root = root or os.getcwd()
+    log.debug("root = {0}, about to os.walk(root)".format(root))
     for dirpath, _, filenames in os.walk(root):
+        log.debug("checking dirpath={0}, filanames = {1}".format(dirpath, filenames))
         for name in filenames:
             if os.path.splitext(name)[-1] == '.tfstate':
                 yield os.path.join(dirpath, name)
@@ -45,7 +70,7 @@ def iterresources(filenames):
                 for key, resource in module['resources'].items():
                     yield name, key, resource
 
-## READ RESOURCES
+# READ RESOURCES
 PARSERS = {}
 
 
@@ -176,7 +201,7 @@ def triton_machine(resource, module_name):
 
     # private IPv4
     for ip in attrs['ips']:
-        if ip.startswith('10') or ip.startswith('192.168'): # private IPs
+        if ip.startswith('10') or ip.startswith('192.168'):  # private IPs
             attrs['private_ipv4'] = ip
             break
 
@@ -239,7 +264,7 @@ def digitalocean_host(resource, tfvars=None):
     attrs.update({
         'consul_dc': _clean_dc(attrs['metadata'].get('dc', attrs['region'])),
         'role': attrs['metadata'].get('role', 'none'),
-        'ansible_python_interpreter': attrs['metadata'].get('python_bin','python')
+        'ansible_python_interpreter': attrs['metadata'].get('python_bin', 'python')
     })
 
     # add groups based on attrs
@@ -368,6 +393,7 @@ def openstack_host(resource, module_name):
 @calculate_mantl_vars
 def aws_host(resource, module_name):
     name = resource['primary']['attributes']['tags.Name']
+    log.debug("aws_host processing {0}".format(name))
     raw_attrs = resource['primary']['attributes']
 
     groups = []
@@ -711,6 +737,8 @@ def query_hostfile(hosts):
 
 
 def main():
+    # sys.settrace(trace_calls)
+
     parser = argparse.ArgumentParser(
         __file__, __doc__,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter, )
@@ -731,27 +759,45 @@ def main():
     parser.add_argument('--nometa',
                         action='store_true',
                         help='with --list, exclude hostvars')
-    default_root = os.environ.get('TERRAFORM_STATE_ROOT',
-                                  os.path.abspath(os.path.join(os.path.dirname(__file__),
-                                                               '..', '..', )))
+    parser.add_argument('--debug',
+                        action="store_const",
+                        dest="loglevel", const=logging.DEBUG,
+                        help="Print lots of debugging statements",
+                        default=logging.WARNING)
+    parser.add_argument('--verbose',
+                        action="store_const",
+                        dest="loglevel", const=logging.INFO,
+                        help="Be verbose")
+    default_root = os.environ.get('TERRAFORM_STATE_ROOT', os.getcwd())
     parser.add_argument('--root',
                         default=default_root,
                         help='custom root to search for `.tfstate`s in')
 
     args = parser.parse_args()
 
+    logging.basicConfig(level=args.loglevel,
+                        format="[%(asctime)s] %(levelname)s [%(name)s.%(funcName)s:%(lineno)d] %(message)s")
+                       # format="%(asctime)s %(levelname)s %(message)s")
+
     if args.version:
         print('%s %s' % (__file__, VERSION))
         parser.exit()
 
+    log.debug("Collecting hosts info from tfstate")
     hosts = iterhosts(iterresources(tfstates(args.root)))
+    log.debug("Finished collecting hosts info from tfstate")
+
     if args.list:
+        log.debug("Running query_list against hosts")
         output = query_list(hosts)
+        log.debug("Finished running query_list against hosts")
         if args.nometa:
             del output['_meta']
         print(json.dumps(output, indent=4 if args.pretty else None))
     elif args.host:
+        log.debug("Running query_host against hosts")
         output = query_host(hosts, args.host)
+        log.debug("Finished running query_host against hosts")
         print(json.dumps(output, indent=4 if args.pretty else None))
     elif args.hostfile:
         output = query_hostfile(hosts)
