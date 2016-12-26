@@ -1,5 +1,45 @@
+# terraform-ansible-demo
 
-## terraform.py performance
+Minimal demo using [terraform.py](https://github.com/CiscoCloud/terraform.py) and an AWS VPC & CentOS 7 instance.  terraform.py has been tweaked slightly to speed up finding the terraform.state file.
+
+## Usage
+
+	$ terraform plan
+	Refreshing Terraform state in-memory prior to plan...
+	The refreshed state will be used to calculate this plan, but
+	will not be persisted to local or remote state storage.
+	
+	aws_vpc.default: Refreshing state... (ID: vpc-9d6d3cf9)
+	aws_key_pair.user_key: Refreshing state... (ID: user_key)
+	data.aws_ami.centos7: Refreshing state...
+	aws_subnet.eu-west-1a-public: Refreshing state... (ID: subnet-1cd6f16a)
+	aws_internet_gateway.default: Refreshing state... (ID: igw-4934fe2d)
+	aws_security_group.web: Refreshing state... (ID: sg-b0771dd6)
+	aws_route_table.eu-west-1a-public: Refreshing state... (ID: rtb-e0907387)
+	aws_route_table_association.eu-west-1a-public: Refreshing state... (ID: rtbassoc-813b68e6)
+	aws_instance.centos7: Refreshing state... (ID: i-0ed32f887225b98a5)
+	
+	No changes. Infrastructure is up-to-date. This means that Terraform
+	could not detect any differences between your configuration and
+	the real physical resources that exist. As a result, Terraform
+	doesn't need to do anything.
+
+Terraform has built a single accessible server, which we can now maintain via [Ansible](https://www.ansible.com/)	
+	
+	$ ansible -i ./terraform.py -m ping all
+	CentOS Server | success >> {
+	    "changed": false,
+	    "ping": "pong"
+	}
+	
+	$
+
+
+## tweaks
+* sys.settrace from [https://pymotw.com/2/sys/tracing.html](https://pymotw.com/2/sys/tracing.html)
+
+
+## terraform.py performance tweak
 
 Vanilla terraform.py:
 
