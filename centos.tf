@@ -14,6 +14,10 @@ data "aws_ami" "centos7" {
   owners = ["679593333241"] # CentOS
 }
 
+data "template_file" "user_data" {
+  template = "${file("templates/user-data.tpl")}"
+}
+
 resource "aws_instance" "centos7" {
   ami           = "${data.aws_ami.centos7.id}"
   instance_type = "t2.micro"
@@ -23,6 +27,8 @@ resource "aws_instance" "centos7" {
   subnet_id                   = "${aws_subnet.eu-west-1a-public.id}"
   associate_public_ip_address = true
   source_dest_check           = false
+
+  user_data = "${data.template_file.user_data.rendered}"
 
   tags {
     Name    = "CentOS Server"

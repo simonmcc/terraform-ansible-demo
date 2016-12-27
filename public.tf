@@ -3,6 +3,7 @@
 */
 resource "aws_security_group" "web" {
   name        = "vpc_web"
+  vpc_id      = "${aws_vpc.default.id}"
   description = "Allow incoming HTTP connections."
 
   ingress {
@@ -33,7 +34,12 @@ resource "aws_security_group" "web" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  vpc_id = "${aws_vpc.default.id}"
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
   tags {
     Name = "WebServerSG"
